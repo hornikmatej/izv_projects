@@ -14,3 +14,5 @@ def plot_stat(data_source,
 
 
 # TODO pri spusteni zpracovat argumenty
+if __name__ == "__main__":
+    pass

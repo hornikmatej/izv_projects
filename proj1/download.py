@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+# Projekt 1 do predmetu IZV
+# Autor: xhorni20@fit.vut.cz
+
+import zipfile
 import numpy as np
 import requests
 import os
@@ -10,6 +15,7 @@ import csv
 from io import TextIOWrapper
 import pickle
 import gzip
+from time import time
 
 # Kromě vestavěných knihoven (os, sys, re, requests …) byste si měli vystačit s: gzip, pickle, csv, zipfile, numpy, matplotlib, BeautifulSoup.
 # Další knihovny je možné použít po schválení opravujícím (např ve fóru WIS).
@@ -21,6 +27,7 @@ class DataDownloader:
     Attributes:
         headers    Nazvy hlavicek jednotlivych CSV souboru, tyto nazvy nemente!  
         regions     Dictionary s nazvy kraju : nazev csv souboru
+        data_types  Datove typy jednotlivych hlaviciek podla zoznamu headers
     """
 
     headers = ["p1", "p36", "p37", "p2a", "weekday(p2a)", "p2b", "p6", "p7", "p8", "p9", "p10", "p11", "p12", "p13a",
@@ -62,7 +69,6 @@ class DataDownloader:
         self.url = url
         self.folder = folder
         self.cache_filename = cache_filename
-
         self.cached_regions = {
         "PHA": None,
         "STC": None,
@@ -130,13 +136,15 @@ class DataDownloader:
             with ZipFile(os.path.join(self.folder, zip_file), 'r') as zip:
                 # otvorim si subor so zadanym regionom
                 with zip.open(self.regions[region] + ".csv", 'r') as file:
+                    prs_rg_zip = time()
+
                     reader = csv.DictReader(TextIOWrapper(file, "cp1250"), fieldnames=self.headers, delimiter=';')
                     no_rows = len(list(reader))
                     # kvoli zisteniu poctu riadok sa musim vratit na zaciatok suboru
                     file.seek(0)
-                    print(f"tento zip {zip_file} a tento subor {file.name} ma {no_rows}")
+                    # print(f"tento zip {zip_file} a tento subor {file.name} ma {no_rows}")
+                    
                     np_arrays = [np.empty(no_rows, dtype=self.data_types[i]) for i in range(len(self.headers))]
-                    # prechadzam kazdy riadok 
                     for row_n, row in enumerate(reader):
                         # prechadzam kazdy stlpec v riadku
                         for col in range(len(self.headers)):
@@ -166,7 +174,7 @@ class DataDownloader:
                                     np_arrays[col][row_n] = row[self.headers[col]]
                                 except ValueError:
                                      np_arrays[col][row_n] = -1
-
+                    
                     # skontrolujem este duplicity
                     x = np_arrays[0].copy() #p1
                     indices, counts = np.unique(x, return_counts=True)
@@ -182,8 +190,11 @@ class DataDownloader:
 
                     # naplnim finalne numpy arraye
                     for i in range(len(np_arrays_result)):
-                            np_arrays_result[i] = np.append(np_arrays_result[i], np_arrays[i])                 
+                            np_arrays_result[i] = np.append(np_arrays_result[i], np_arrays[i])
 
+                    prs_rg_zip_end = time()
+                    print(f"\tSpracovanie suboru {file.name} v {zip_file} trvalo {(prs_rg_zip_end - prs_rg_zip):.4f}s")  
+                    
         # vytvorim slovnik
         dict_data = {}
         region_array = np.full(np_arrays_result[0].size, region, dtype="U3")
@@ -211,25 +222,36 @@ class DataDownloader:
         data_dict_stacked["region"] = np.empty(0, dtype="U3")
         
         for region in regions:
+            loop_reg_get_dict = time()
             print(f"Pracujem na tomto regione = {region}")
             # ak je region ulozeny v pamati
             if self.cached_regions[region] is not None:
                 # prechadzam kazdu hlavicku a pridavam do velkeho slovniku
                 for key in self.cached_regions[region].keys():
                     data_dict_stacked[key] = np.append(data_dict_stacked[key], self.cached_regions[region][key])
+                loop_reg_get_dict_end = time()
+                print(f"\tLoop 1 regionu trval {(loop_reg_get_dict_end - loop_reg_get_dict):.4f}s")
                 continue
 
             # ak je v cache subore
             cache_filename = os.path.join(self.folder, self.cache_filename.replace("{}",region))
             if os.path.exists(cache_filename):
                 # nacitam data z cache suboru
+                opn_gzip = time()
                 with gzip.open(cache_filename, 'rb') as f_out:
                     cached_region = pickle.load(f_out)
+                opn_gzip_end = time()
+                print(f"\tOtvaranie gzip filu '{cache_filename}': {(opn_gzip_end - opn_gzip):.4f}s")
+                data_to_dict = time()
                 # ulozim si ich do vysledneho slovnika
                 for key in cached_region.keys():
                         data_dict_stacked[key] = np.append(data_dict_stacked[key], cached_region[key])
+                data_to_dict_end = time()
+                print(f"\tUkladanaie do vys. slovnika: {(data_to_dict_end - data_to_dict):.4f}s")
                 # ulozim si ich do pamate
                 self.cached_regions[region] = cached_region
+                loop_reg_get_dict_end = time()
+                print(f"\tLoop 1 regionu: {(loop_reg_get_dict_end - loop_reg_get_dict):.4f}s")
                 continue
 
             # region je treba nacitat s parse_region_data
@@ -240,15 +262,57 @@ class DataDownloader:
             # ulozim si ich do pamate
             self.cached_regions[region] = parsed_region
             # ulozim si do cache suboru
+            gzip_file = time()
             pickled = pickle.dumps(parsed_region)
-            with gzip.open(cache_filename, 'wb') as f_out:
+            with gzip.open(cache_filename, 'wb', compresslevel=1) as f_out:
                 f_out.write(pickled)
+            gzip_file_end = time()
+            print(f"\tGzipovanie filu '{cache_filename}': {(gzip_file_end - gzip_file):.4f}s")
+            loop_reg_get_dict_end = time()
+            print(f"\tLoop 1 regionu: {(loop_reg_get_dict_end - loop_reg_get_dict):.4f}s")
             
         return data_dict_stacked
+
+    def print_colums_info(self):
+        """Na standardny vystup sa vypisu informacie o jednotlivych hlavickach
+        """
+
+        colums_info = {"p1" : "IDENTIFIKAČNÍ ČÍSLO", "p36" : "DRUH POZEMNÍ KOMUNIKACE", "p37" : "ČÍSLO POZEMNÍ KOMUNIKACE",
+                    "p2a" : "DÁTUM", "weekday(p2a)" : "DEŇ V TÝŽDNI", "p2b" : "ČAS", "p6" : "DRUH NEHODY", 
+                    "p7" : "DRUH SRÁŽKY JEDOUCÍCH VOZIDEL", "p8" : "DRUH PEVNÉ PŘEKÁŽKY", "p9" : "CHARAKTER NEHODY",
+                    "p10" : "ZAVINĚNÍ NEHODY", "p11" : "ALKOHOL U VINÍKA NEHODY PŘÍTOMEN", "p12" : "HLAVNÍ PŘÍČINY NEHODY",
+                    "p13a" : "USMRCENO OSOB", "p13b" : "TĚŽCE ZRANĚNO OSOB", "p13c" : "LEHCE ZRANĚNO OSOB", 
+                    "p14" : "CELKOVÁ HMOTNÁ ŠKODA", "p15" : "DRUH POVRCHU VOZOVKY", "p16" : "STAV POVRCHU VOZOVKY V DOBĚ NEHODY",
+                    "p17" : "STAV KOMUNIKACE", "p18" : "POVĚTRNOSTNÍ PODMÍNKY V DOBĚ NEHODY", "p19" : "VIDITELNOST", 
+                    "p20" : "ROZHLEDOVÉ POMĚRY", "p21" : "DĚLENÍ KOMUNIKACE", "p22" : "SITUOVÁNÍ NEHODY NA KOMUNIKACI",
+                    "p23" : "ŘÍZENÍ PROVOZU V DOBĚ NEHODY", "p24" : "MÍSTNÍ ÚPRAVA PŘEDNOSTI V JÍZDĚ", 
+                    "p27" : "SPECIFICKÁ MÍSTA A OBJEKTY V MÍSTĚ NEHODY", "p28" : "SMĚROVÉ POMĚRY", "p34" : "POČET ZÚČASTNĚNÝCH VOZIDEL", 
+                    "p35" : "MÍSTO DOPRAVNÍ NEHODY", "p39" : "DRUH KŘIŽUJÍCÍ KOMUNIKACE", "p44" : "DRUH VOZIDLA", 
+                    "p45a" : "VÝROBNÍ ZNAČKA MOTOROVÉHO VOZIDLA", "p47" : "ROK VÝROBY VOZIDLA", "p48a" : "CHARAKTERISTIKA VOZIDLA ", 
+                    "p49" : "SMYK", "p50a" : "VOZIDLO PO NEHODĚ", "p50b" : "ÚNIK PROVOZNÍCH, PŘEPRAVOVANÝCH HMOT", 
+                    "p51" : "ZPŮSOB VYPROŠTĚNÍ OSOB Z VOZIDLA", "p52" : "SMĚR JÍZDY NEBO POSTAVENÍ VOZIDLA", "p53" : "ŠKODA NA VOZIDLE", 
+                    "p55a" : "KATEGORIE ŘIDIČE", "p57" : "STAV ŘIDIČE", "p58" : "VNĚJŠÍ OVLIVNĚNÍ ŘIDIČE", "p5a" : "LOKALITA NEHODY",
+                    "d" : "GPS souřadnice X", "e" : "GPS souřadnice Y", "a, b, f, g, h, i, j, k, l, n, o, p, q, r, s, t" : "ĎALŠIE INFORMÁCIE"}
+        print("Informacie o polozkach v stlpcoch:\n")
+        for k, v in colums_info.items():
+            print(f"{k}\t - {v}")
 
 # TODO vypsat zakladni informace pri spusteni python3 download.py (ne pri importu modulu)
 
 if __name__ == "__main__":
-    # DataDownloader().download_data()
-    # DataDownloader().parse_region_data("KVK")
-    DataDownloader().get_dict(regions=["KVK"])
+
+    prg_time = time()
+    dict_info = DataDownloader().get_dict()
+    prg_time_end = time()
+    print(f"========\n Program celkovo trval: {(prg_time_end - prg_time):.4f}")
+    # # vypisanie zakladnych informacii na vystup pri spusteni
+    # regions3 = ["PAK", "LBK", "KVK"]
+    # dict_info = DataDownloader().get_dict(regions3)
+    # pocet_zaznamov = dict_info["region"].size
+    # DataDownloader().print_colums_info()
+    # print(f"Zakladne informacie o 3 regionoch ->")
+    # print(f"Pocet zaznamov v ukazkovych datach = {pocet_zaznamov}")
+    # print(f"Regiony v ukazkovych datach = {regions3}")
+    # print(f"PAK -> Pardubicky kraj, LBK -> Liberecky kraj, KVK -> Karlovarsky kraj")
+
+
