@@ -302,5 +302,3 @@ if __name__ == "__main__":
     print(f"Pocet zaznamov v ukazkovych datach = {pocet_zaznamov}")
     print(f"Regiony v ukazkovych datach = {regions3}")
     print(f"PAK -> Pardubicky kraj, LBK -> Liberecky kraj, KVK -> Karlovarsky kraj")
-
-
