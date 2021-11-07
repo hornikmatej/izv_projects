@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Projekt 1 do predmetu IZV
-# Autor: xhorni20@fit.vut.cz
+# Autor: xhorni20@fit.vut.cz (Matej Hornik)
 
 import zipfile
 import numpy as np
@@ -25,9 +25,9 @@ class DataDownloader:
     """ TODO: dokumentacni retezce 
 
     Attributes:
-        headers    Nazvy hlavicek jednotlivych CSV souboru, tyto nazvy nemente!  
-        regions     Dictionary s nazvy kraju : nazev csv souboru
-        data_types  Datove typy jednotlivych hlaviciek podla zoznamu headers
+        headers  -- Nazvy hlavicek jednotlivych CSV souboru, tyto nazvy nemente!  
+        regions -- Dictionary s nazvy kraju : nazev csv souboru
+        data_types -- Datove typy jednotlivych hlaviciek podla zoznamu headers
     """
 
     headers = ["p1", "p36", "p37", "p2a", "weekday(p2a)", "p2b", "p6", "p7", "p8", "p9", "p10", "p11", "p12", "p13a",
@@ -87,6 +87,8 @@ class DataDownloader:
         }   
 
     def download_data(self):
+        """Zo stranky sa stiahnu zip subory s datami
+        """
         # ak neexistuje adresar, vytvorime ho
         if not os.path.exists(self.folder):
             os.makedirs(self.folder)
@@ -113,6 +115,11 @@ class DataDownloader:
 
 
     def parse_region_data(self, region):
+        """Spracuju sa data do numpy poli zo zip suborov v zlozke
+
+        Argumetns:
+            region -- nazov regionu pre ktory sa spracuju data zo zip suboru
+        """
         
         # kontrola spravnosti regionu
         if region not in self.regions.keys():
@@ -136,7 +143,6 @@ class DataDownloader:
             with ZipFile(os.path.join(self.folder, zip_file), 'r') as zip:
                 # otvorim si subor so zadanym regionom
                 with zip.open(self.regions[region] + ".csv", 'r') as file:
-                    prs_rg_zip = time()
 
                     reader = csv.DictReader(TextIOWrapper(file, "cp1250"), fieldnames=self.headers, delimiter=';')
                     no_rows = len(list(reader))
@@ -191,9 +197,6 @@ class DataDownloader:
                     # naplnim finalne numpy arraye
                     for i in range(len(np_arrays_result)):
                             np_arrays_result[i] = np.append(np_arrays_result[i], np_arrays[i])
-
-                    prs_rg_zip_end = time()
-                    print(f"\tSpracovanie suboru {file.name} v {zip_file} trvalo {(prs_rg_zip_end - prs_rg_zip):.4f}s")  
                     
         # vytvorim slovnik
         dict_data = {}
@@ -207,6 +210,12 @@ class DataDownloader:
         return dict_data
 
     def get_dict(self, regions=None):
+        """Vytvori slovnik dat pre dane regiony a ulozi data do cache pamate 
+        a taktiez do cache suborov ak este neexistuju
+        
+        Keyword arguments:
+        regions -- Pre ktore regiony sa ma vytvorit slovnik a ulozit do cache (default "None") - vsetky regiony
+        """
         # ak je regions None -> nastavim vsetky regiony
         if regions is None:
             regions = self.regions.keys()
@@ -222,36 +231,24 @@ class DataDownloader:
         data_dict_stacked["region"] = np.empty(0, dtype="U3")
         
         for region in regions:
-            loop_reg_get_dict = time()
-            print(f"Pracujem na tomto regione = {region}")
             # ak je region ulozeny v pamati
             if self.cached_regions[region] is not None:
                 # prechadzam kazdu hlavicku a pridavam do velkeho slovniku
                 for key in self.cached_regions[region].keys():
                     data_dict_stacked[key] = np.append(data_dict_stacked[key], self.cached_regions[region][key])
-                loop_reg_get_dict_end = time()
-                print(f"\tLoop 1 regionu trval {(loop_reg_get_dict_end - loop_reg_get_dict):.4f}s")
                 continue
 
             # ak je v cache subore
             cache_filename = os.path.join(self.folder, self.cache_filename.replace("{}",region))
             if os.path.exists(cache_filename):
                 # nacitam data z cache suboru
-                opn_gzip = time()
                 with gzip.open(cache_filename, 'rb') as f_out:
                     cached_region = pickle.load(f_out)
-                opn_gzip_end = time()
-                print(f"\tOtvaranie gzip filu '{cache_filename}': {(opn_gzip_end - opn_gzip):.4f}s")
-                data_to_dict = time()
                 # ulozim si ich do vysledneho slovnika
                 for key in cached_region.keys():
                         data_dict_stacked[key] = np.append(data_dict_stacked[key], cached_region[key])
-                data_to_dict_end = time()
-                print(f"\tUkladanaie do vys. slovnika: {(data_to_dict_end - data_to_dict):.4f}s")
                 # ulozim si ich do pamate
                 self.cached_regions[region] = cached_region
-                loop_reg_get_dict_end = time()
-                print(f"\tLoop 1 regionu: {(loop_reg_get_dict_end - loop_reg_get_dict):.4f}s")
                 continue
 
             # region je treba nacitat s parse_region_data
@@ -262,14 +259,9 @@ class DataDownloader:
             # ulozim si ich do pamate
             self.cached_regions[region] = parsed_region
             # ulozim si do cache suboru
-            gzip_file = time()
             pickled = pickle.dumps(parsed_region)
             with gzip.open(cache_filename, 'wb', compresslevel=1) as f_out:
                 f_out.write(pickled)
-            gzip_file_end = time()
-            print(f"\tGzipovanie filu '{cache_filename}': {(gzip_file_end - gzip_file):.4f}s")
-            loop_reg_get_dict_end = time()
-            print(f"\tLoop 1 regionu: {(loop_reg_get_dict_end - loop_reg_get_dict):.4f}s")
             
         return data_dict_stacked
 
@@ -301,18 +293,14 @@ class DataDownloader:
 
 if __name__ == "__main__":
 
-    prg_time = time()
-    dict_info = DataDownloader().get_dict()
-    prg_time_end = time()
-    print(f"========\n Program celkovo trval: {(prg_time_end - prg_time):.4f}")
-    # # vypisanie zakladnych informacii na vystup pri spusteni
-    # regions3 = ["PAK", "LBK", "KVK"]
-    # dict_info = DataDownloader().get_dict(regions3)
-    # pocet_zaznamov = dict_info["region"].size
-    # DataDownloader().print_colums_info()
-    # print(f"Zakladne informacie o 3 regionoch ->")
-    # print(f"Pocet zaznamov v ukazkovych datach = {pocet_zaznamov}")
-    # print(f"Regiony v ukazkovych datach = {regions3}")
-    # print(f"PAK -> Pardubicky kraj, LBK -> Liberecky kraj, KVK -> Karlovarsky kraj")
+    # vypisanie zakladnych informacii na vystup pri spusteni
+    regions3 = ["PAK", "LBK", "KVK"]
+    dict_info = DataDownloader().get_dict(regions3)
+    pocet_zaznamov = dict_info["region"].size
+    DataDownloader().print_colums_info()
+    print(f"Zakladne informacie o 3 regionoch ->")
+    print(f"Pocet zaznamov v ukazkovych datach = {pocet_zaznamov}")
+    print(f"Regiony v ukazkovych datach = {regions3}")
+    print(f"PAK -> Pardubicky kraj, LBK -> Liberecky kraj, KVK -> Karlovarsky kraj")
 
 
