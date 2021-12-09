@@ -92,7 +92,7 @@ def plot_animals(df: pd.DataFrame, fig_location: str = None,
     # nastavenie grafu
     sns.set(rc={'axes.facecolor': '#eaeaf2'})
     fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27))
-    fig.suptitle("Nehody zaviněné zvěří")    
+    fig.suptitle("Nehody v mesiacoch")    
     ax = axes.flat
     pd.options.mode.chained_assignment = None
 
