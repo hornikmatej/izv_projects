@@ -71,26 +71,33 @@ def plot_roadtype(df: pd.DataFrame, fig_location: str = None,
 
     kraje = ['HKK', 'JHC', 'JHM', 'KVK']
     df = df.loc[df['region'].isin(kraje)]
-    titles = ['Dvoupruhová komunikace', 'Třípruhová komunika', 'Čtyřpruhová komunikace s dělícím pásem',
-              'Čtyřpruhová komunikace s dělící čarou', 'Vícepruhová komunikace', 'Jiná komunikace']
+    titles = ['Dvoupruhová komunikace', 'Třípruhová komunika', 'Čtyřpruhová komunikace',
+              'Vícepruhová komunikace', 'Rychlostní komunikace', 'Jiná komunikace']
     # nastavenie grafu
     sns.set(rc={'axes.facecolor': '#eaeaf2'})
     fig, axes = plt.subplots(2, 3, figsize=(11.69, 8.27))
     fig.suptitle("Druhy silnic")
-    plt.setp(axes[:, 0], ylabel='Počet nehod')
+    
     ax = axes.flat
     
-    # vytvorenie 6 podgrafov TODO: FIX 
+    # vytvorenie 6 podgrafov
+    index = 1 # index pre typy komunikacii
     for i in range(6):
         # ziskanie dat pre jednotlive druhy komunikacie
-        data = df.loc[df['p21'] == i + 1].groupby('region')['p21'].count()
-        if i == 5:
-            # pripocitam aj data s inou komunikaciu k rychlostni komunikaci - > zobrazena ako jina komunikace
-            data = data + df.loc[df['p21'] == 0].groupby('region')['p21'].count()
+        index = 0 if index == 7 else index # ak sa jedna o posledny graf tak to je 0 v stlpci p21
+        data = df.loc[df['p21'] == index].groupby('region')['p21'].count()
+        if index == 3:
+            # ctyrpruhova komunikace je v 2 stlpoch tak ich spocitam spolu
+            data = data + df.loc[df['p21'] == index + 1].groupby('region')['p21'].count()
+            index += 1
+        
         sns.barplot(ax=ax[i], x=data.index, y=data.values, 
                     palette=['blue', 'orange', 'green', 'red'], ).set_title(titles[i])
+        index += 1
 
-    plt.tight_layout()
+    plt.subplots_adjust(hspace=0.4) 
+    plt.setp(axes[:, 0], ylabel='Počet nehod')
+    plt.setp(axes, xlabel='Kraj')
     # ulozenie grafu do suboru
     if (fig_location):
         plt.savefig(fig_location)
@@ -153,6 +160,19 @@ def plot_animals(df: pd.DataFrame, fig_location: str = None,
 # Ukol 4: Povětrnostní podmínky
 def plot_conditions(df: pd.DataFrame, fig_location: str = None,
                     show_figure: bool = False):
+    """Funkcia vytvori graf so 4 podgrafmi, ktore zobrazia pocet nehod v od zaciatku 2016 do konca 2020.
+    Pocty nehod rozdeli podla podmienok pocasia
+    V pripade zadaneho argumentu fig_location, sa graf ulozi do suboru. 
+    V pripade zadaneho argumentu show_figure, sa graf zobrazi 
+
+    Arguments:
+    df -- Pandas DataFrame, data z ktoreho sa vytvoria grafy
+
+    Keyword Arguments:
+    fig_location -- Nazov suboru, do ktoreho sa ulozi vysledny graf(default None)
+    show_figure -- Graf sa zobrazi na obrazovke pri hodnote True(default False)
+    """
+    # vybrate kraje, pre ktore sa zobrazia data
     kraje = ['HKK', 'JHC', 'JHM', 'KVK']
     df = df.loc[df['region'].isin(kraje)]
     
@@ -186,7 +206,8 @@ def plot_conditions(df: pd.DataFrame, fig_location: str = None,
     fig.legend(h, l, loc='right', bbox_to_anchor=(1.0, 0.5), title='Podmínky', frameon=False)
     plt.subplots_adjust(right=0.85, hspace=0.4) 
 
-    plt.setp(ax, ylabel='Počet nehod')
+    plt.setp(ax, ylabel='Počet nehod', xlabel='Dátum')
+    # ulozenie grafu so suboru
     if (fig_location):
         plt.savefig(fig_location)
     # zobrazenie grafu
@@ -198,7 +219,7 @@ if __name__ == "__main__":
     # zde je ukazka pouziti, tuto cast muzete modifikovat podle libosti
     # skript nebude pri testovani pousten primo, ale budou volany konkreni ¨
     # funkce.
-    df = get_dataframe("accidents.pkl.gz", verbose=True) # tento soubor si stahnete sami, při testování pro hodnocení bude existovat
-    # plot_roadtype(df, "01_road.png",show_figure=True)
-    # plot_animals(df, "02_animals.png", True)
-    plot_conditions(df, "03_conditions.png", True)
+    df = get_dataframe("data/accidents.pkl.gz", verbose=True) # tento soubor si stahnete sami, při testování pro hodnocení bude existovat
+    plot_roadtype(df, "data/01_road.png",show_figure=True)
+    # plot_animals(df, "data/02_animals.png", True)
+    # plot_conditions(df, "data/03_conditions.png", True)
