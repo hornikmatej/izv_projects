@@ -1,5 +1,6 @@
 #!/usr/bin/env python3.9
 # coding=utf-8
+from datetime import date
 from matplotlib import pyplot as plt
 import pandas as pd
 import seaborn as sns
@@ -32,6 +33,9 @@ def get_dataframe(filename: str, verbose: bool = False) -> pd.DataFrame:
 
     Keyword arguments:
     verbose -- Na standardny vystup vypise informacie o velkosti ramcu pred a po uprave typov (default False)
+
+    Returns:
+    df -- pandas DataFrame s upravenymi typmi dat v urcitych stlpoch a pridanim stlpcom s datumom
     """
     df = pd.read_pickle(filename)
 
@@ -53,6 +57,17 @@ def get_dataframe(filename: str, verbose: bool = False) -> pd.DataFrame:
 
 def plot_roadtype(df: pd.DataFrame, fig_location: str = None,
                   show_figure: bool = False):
+    """Funkcia vytvori graf so 6 podgrafmi s nehodami v 4 krajoch podla typu silnicnej komunikacie
+    V pripade zadaneho argumentu fig_location, sa graf ulozi do suboru. 
+    V pripade zadaneho argumentu show_figure, sa graf zobrazi 
+
+    Arguments:
+    df -- Pandas DataFrame, data z ktoreho sa vytvoria grafy
+
+    Keyword Arguments:
+    fig_location -- Nazov suboru, do ktoreho sa ulozi vysledny graf(default None)
+    show_figure -- Graf sa zobrazi na obrazovke pri hodnote True(default False)
+    """
 
     kraje = ['HKK', 'JHC', 'JHM', 'KVK']
     df = df.loc[df['region'].isin(kraje)]
@@ -65,7 +80,7 @@ def plot_roadtype(df: pd.DataFrame, fig_location: str = None,
     plt.setp(axes[:, 0], ylabel='Počet nehod')
     ax = axes.flat
     
-    # vytvorenie 6 podgrafov
+    # vytvorenie 6 podgrafov TODO: FIX 
     for i in range(6):
         # ziskanie dat pre jednotlive druhy komunikacie
         data = df.loc[df['p21'] == i + 1].groupby('region')['p21'].count()
@@ -87,6 +102,19 @@ def plot_roadtype(df: pd.DataFrame, fig_location: str = None,
 # Ukol3: zavinění zvěří
 def plot_animals(df: pd.DataFrame, fig_location: str = None,
                  show_figure: bool = False):
+    """Funkcia vytvori graf so 4 podgrafmi, ktore zobrazia pocet nehod v jednotlivych mesiacoch rozdelenych 
+    podla typu zavinenia (zveri, ridicem, jine). 4 podgrafy pre 4 rozne kraje.
+    V pripade zadaneho argumentu fig_location, sa graf ulozi do suboru. 
+    V pripade zadaneho argumentu show_figure, sa graf zobrazi 
+
+    Arguments:
+    df -- Pandas DataFrame, data z ktoreho sa vytvoria grafy
+
+    Keyword Arguments:
+    fig_location -- Nazov suboru, do ktoreho sa ulozi vysledny graf(default None)
+    show_figure -- Graf sa zobrazi na obrazovke pri hodnote True(default False)
+    """
+
     kraje = ['HKK', 'JHC', 'JHM', 'KVK']
     df = df.loc[df['region'].isin(kraje)]
     # nastavenie grafu
@@ -125,7 +153,46 @@ def plot_animals(df: pd.DataFrame, fig_location: str = None,
 # Ukol 4: Povětrnostní podmínky
 def plot_conditions(df: pd.DataFrame, fig_location: str = None,
                     show_figure: bool = False):
-    pass
+    kraje = ['HKK', 'JHC', 'JHM', 'KVK']
+    df = df.loc[df['region'].isin(kraje)]
+    
+    # nastavenie grafu
+    sns.set(rc={'axes.facecolor': '#eaeaf2'})
+    fig, axes = plt.subplots(2, 2, figsize=(11.69, 8.27))
+    fig.suptitle("Povětrnostní podmínky")
+    ax = axes.flat
+
+    # odmazanie dat ktore mali stlpec p18 v 0
+    df = df.loc[df['p18'] != 0]
+    # nastavenie retazcom za hodnoty v stlpci p18
+    labels = ["neztížené", "mlha", "na počátku deště", "déšť", "sněžení", "náledí", "nárazový vítr"]
+    df['p18'] = pd.cut(df['p18'], bins=[1, 2, 3, 4, 5, 6, 7, 8], labels=labels, 
+                       right=False)
+    # v pre kazdy den a kraj v stlpci pocet nehod pre rozne podmienky
+    df_pivot = pd.pivot_table(df, columns="p18", values="p1", index=["region", "date"], aggfunc="count").reset_index()
+
+    for i in range(4):
+        # vyberem data len pre 1 region a podvzorkujem data na uroven mesiacov
+        data = (df_pivot.loc[df_pivot['region'] == kraje[i]]).groupby('date').agg('sum').resample('M').sum().reset_index()
+        # dam prec data z roku 2021 
+        data = data.loc[data['date'].dt.year != 2021]
+        # vytvorenie grafu
+        axplt = sns.lineplot(x ="date", y="value", hue="p18", data=data.melt(id_vars="date"), ax=ax[i])
+        axplt.legend_.remove()
+        axplt.set_title(f"Kraj: {kraje[i]}") 
+    
+    # nastavenie legendy a celeho grafu podla zadania
+    h, l = ax[0].get_legend_handles_labels()
+    fig.legend(h, l, loc='right', bbox_to_anchor=(1.0, 0.5), title='Podmínky', frameon=False)
+    plt.subplots_adjust(right=0.85, hspace=0.4) 
+
+    plt.setp(ax, ylabel='Počet nehod')
+    if (fig_location):
+        plt.savefig(fig_location)
+    # zobrazenie grafu
+    if (show_figure):
+        plt.show()
+    plt.close(fig)
 
 if __name__ == "__main__":
     # zde je ukazka pouziti, tuto cast muzete modifikovat podle libosti
@@ -133,5 +200,5 @@ if __name__ == "__main__":
     # funkce.
     df = get_dataframe("accidents.pkl.gz", verbose=True) # tento soubor si stahnete sami, při testování pro hodnocení bude existovat
     # plot_roadtype(df, "01_road.png",show_figure=True)
-    plot_animals(df, "02_animals.png", True)
+    # plot_animals(df, "02_animals.png", True)
     plot_conditions(df, "03_conditions.png", True)
