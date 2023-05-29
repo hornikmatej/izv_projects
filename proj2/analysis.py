@@ -221,5 +221,5 @@ if __name__ == "__main__":
     # funkce.
     df = get_dataframe("data/accidents.pkl.gz", verbose=True) # tento soubor si stahnete sami, při testování pro hodnocení bude existovat
     plot_roadtype(df, "data/01_road.png",show_figure=True)
-    # plot_animals(df, "data/02_animals.png", True)
-    # plot_conditions(df, "data/03_conditions.png", True)
+    plot_animals(df, "data/02_animals.png", True)
+    plot_conditions(df, "data/03_conditions.png", True)
